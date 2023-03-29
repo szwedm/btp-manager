@@ -129,14 +129,16 @@ type BtpOperatorReconciler struct {
 	*rest.Config
 	Scheme          *runtime.Scheme
 	manifestHandler *manifest.Handler
+	sisbController  *SISBController
 	workqueueSize   int
 }
 
-func NewBtpOperatorReconciler(client client.Client, scheme *runtime.Scheme) *BtpOperatorReconciler {
+func NewBtpOperatorReconciler(client client.Client, scheme *runtime.Scheme, sisbController *SISBController) *BtpOperatorReconciler {
 	return &BtpOperatorReconciler{
 		Client:          client,
 		Scheme:          scheme,
 		manifestHandler: &manifest.Handler{Scheme: scheme},
+		sisbController:  sisbController,
 	}
 }
 
@@ -266,6 +268,10 @@ func (r *BtpOperatorReconciler) HandleProcessingState(ctx context.Context, cr *v
 
 	if err := r.reconcileResources(ctx, secret); err != nil {
 		return r.UpdateBtpOperatorStatus(ctx, cr, types.StateError, ProvisioningFailed, err.Error())
+	}
+
+	if !r.sisbController.started {
+		r.sisbController.Start(ctx)
 	}
 
 	logger.Info("provisioning succeeded")
@@ -575,6 +581,7 @@ func (r *BtpOperatorReconciler) HandleErrorState(ctx context.Context, cr *v1alph
 func (r *BtpOperatorReconciler) HandleDeletingState(ctx context.Context, cr *v1alpha1.BtpOperator) error {
 	logger := log.FromContext(ctx)
 	logger.Info("Handling Deleting state")
+	r.sisbController.Stop(ctx)
 
 	if len(cr.GetFinalizers()) == 0 {
 		logger.Info("BtpOperator CR without finalizers - nothing to do, waiting for deletion")
@@ -1070,6 +1077,10 @@ func (r *BtpOperatorReconciler) HandleReadyState(ctx context.Context, cr *v1alph
 
 	if err := r.reconcileResources(ctx, secret); err != nil {
 		return r.UpdateBtpOperatorStatus(ctx, cr, types.StateError, ReconcileFailed, err.Error())
+	}
+
+	if !r.sisbController.started {
+		r.sisbController.Start(ctx)
 	}
 
 	logger.Info("reconciliation succeeded")

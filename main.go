@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 	//test
@@ -24,6 +25,8 @@ import (
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -104,7 +107,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	reconciler := controllers.NewBtpOperatorReconciler(mgr.GetClient(), scheme)
+	sisbController, err := controllers.NewSISBController(mgr, reconcile.Func(func(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
+		logger := log.FromContext(ctx)
+		logger.Info("SISBController received reconcile request!", "Source:", request.Name)
+		return reconcile.Result{}, nil
+	}))
+	reconciler := controllers.NewBtpOperatorReconciler(mgr.GetClient(), scheme, sisbController)
 
 	if err = reconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "BtpOperator")
